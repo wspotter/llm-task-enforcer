@@ -1,0 +1,48 @@
+# SuperManUS TaskEnforcer Dependencies
+# Core dependencies for task enforcement system
+
+# Testing and Quality Assurance
+pytest>=7.0.0                  # Testing framework
+pytest-cov>=4.0.0              # Coverage reporting
+pytest-mock>=3.10.0            # Mock utilities for testing
+coverage>=7.0.0                 # Test coverage measurement
+
+# Development Tools
+flake8>=6.0.0                  # Code linting
+mypy>=1.0.0                    # Static type checking
+black>=23.0.0                  # Code formatting
+isort>=5.12.0                  # Import sorting
+
+# Documentation
+markdown>=3.4.0                # Markdown processing
+mkdocs>=1.4.0                  # Documentation generation (optional)
+mkdocs-material>=9.0.0         # Material theme for docs (optional)
+
+# Utilities
+requests>=2.28.0               # HTTP requests for integrations
+pyyaml>=6.0.0                  # YAML configuration support
+python-dateutil>=2.8.0        # Date/time utilities
+pathlib2>=2.3.0;python_version<"3.6"  # Pathlib backport for older Python
+
+# Optional Integration Dependencies
+# These are optional and will be installed if available
+
+# VS Code / Cursor Integration
+# No specific dependencies required - uses file system operations
+
+# GitHub Copilot Integration  
+# No specific dependencies required - uses file system operations
+
+# Claude Code Integration
+# No specific dependencies required - uses standard library
+
+# Security and Validation
+jsonschema>=4.17.0             # JSON schema validation
+cryptography>=3.4.0           # Cryptographic functions (for secure tokens)
+
+# Performance and Monitoring (Optional)
+psutil>=5.9.0                  # System monitoring
+memory-profiler>=0.61.0       # Memory usage profiling
+
+# Development and Testing Extras
+# Install with: pip install -r requirements-dev.txt

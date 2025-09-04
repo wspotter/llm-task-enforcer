@@ -1,0 +1,201 @@
+{
+  "session_states": {
+    "basic_project": {
+      "current_session_id": "TEST_001",
+      "last_updated": "2025-09-04T10:00:00Z",
+      "project_name": "Basic Test Project",
+      "current_phase": "development",
+      "active_tasks": [
+        "T1.1: Implement basic feature",
+        "T1.2: Add unit tests",
+        "T2.1: Create documentation"
+      ],
+      "completed_tasks": [
+        "SETUP.1: Initialize project structure"
+      ],
+      "team_assignments": {
+        "test_developer": ["T1.1", "T1.2"],
+        "doc_writer": ["T2.1"]
+      },
+      "validation_requirements": {
+        "all_tasks": {
+          "work_log_required": true,
+          "proof_required": true
+        }
+      }
+    },
+    "security_project": {
+      "current_session_id": "SEC_001", 
+      "project_name": "Security Test Project",
+      "active_tasks": [
+        "SEC.1: Implement OAuth2 authentication",
+        "SEC.2: Add input validation",
+        "SEC.3: Security audit and penetration test"
+      ],
+      "validation_requirements": {
+        "all_tasks": {
+          "work_log_required": true,
+          "proof_required": true,
+          "tests_required": true
+        },
+        "security_tasks": {
+          "security_review": true,
+          "penetration_test": true,
+          "human_approval": true
+        }
+      }
+    },
+    "multi_developer": {
+      "current_session_id": "TEAM_001",
+      "project_name": "Multi-Developer Project",
+      "active_tasks": [
+        "FRONTEND.1: Create React components",
+        "BACKEND.1: Implement REST API",
+        "DATABASE.1: Design schema migrations", 
+        "DEVOPS.1: Setup CI/CD pipeline"
+      ],
+      "team_assignments": {
+        "frontend_dev": ["FRONTEND.1"],
+        "backend_dev": ["BACKEND.1"],
+        "database_dev": ["DATABASE.1"],
+        "devops_dev": ["DEVOPS.1"]
+      },
+      "validation_requirements": {
+        "all_tasks": {"work_log_required": true},
+        "database_tasks": {"migration_test_required": true},
+        "devops_tasks": {"deployment_test_required": true}
+      }
+    }
+  },
+  "work_log_templates": {
+    "basic_template": "# Work Log for {task_id}\n\n## Task Information\n- **Task ID:** {task_id}\n- **Description:** {description}\n- **Start Time:** {start_time}\n\n## Work Performed\n### Step 1: Initial Setup\n- **Command:** {command}\n- **Expected:** {expected}\n- **Actual:** {actual}\n\n## Validation\n- [ ] Tests pass\n- [ ] Code review complete\n- [ ] Documentation updated",
+    "security_template": "# Security Work Log for {task_id}\n\n## Security Considerations\n- Threat model reviewed\n- Security requirements identified\n- Mitigation strategies planned\n\n## Implementation\n### Security Controls Implemented\n- Authentication: {auth_details}\n- Authorization: {authz_details} \n- Input validation: {validation_details}\n\n## Security Testing\n- [ ] Unit tests for security functions\n- [ ] Integration tests for auth flow\n- [ ] Penetration testing completed\n- [ ] Security review passed"
+  },
+  "proof_packages": {
+    "comprehensive": {
+      "file_evidence": "ls -la src/ && find src/ -name '*.py' | wc -l",
+      "functional_test": "python -m pytest tests/ -v --coverage",
+      "integration_test": "python integration_test.py",
+      "code_quality": "python -m flake8 src/ && python -m mypy src/", 
+      "security_scan": "bandit -r src/ -f json",
+      "documentation": "Updated README.md and docs/ with implementation details"
+    },
+    "minimal": {
+      "file_evidence": "ls -la implementation_file.py",
+      "functional_test": "python implementation_file.py"
+    },
+    "insufficient": {
+      "claim": "It works"
+    }
+  },
+  "validation_scenarios": {
+    "valid_justifications": [
+      "Implementing OAuth2 authentication as required by task SEC.1 for secure user login",
+      "Adding input validation to prevent SQL injection as specified in SEC.2",
+      "Creating React components for user dashboard as outlined in FRONTEND.1 requirements",
+      "Setting up database migrations for user table as needed by DATABASE.1"
+    ],
+    "invalid_justifications": [
+      "Making it better",
+      "Random improvement", 
+      "Because I want to",
+      "It's necessary",
+      "Updating code"
+    ],
+    "blocked_actions": [
+      {
+        "action": "write_file",
+        "data": {"path": "fancy_animations.py", "content": "# Cool animations"},
+        "justification": "Adding fancy animations to make UI prettier",
+        "reason": "Not related to current task"
+      },
+      {
+        "action": "run_command", 
+        "data": {"command": "rm -rf /"},
+        "justification": "Cleaning up system for task implementation",
+        "reason": "Dangerous command blocked"
+      }
+    ]
+  },
+  "test_tasks": {
+    "simple_implementation": {
+      "task_id": "T1.1: Implement user authentication",
+      "description": "Create basic user authentication system with login/logout",
+      "estimated_duration": "4 hours",
+      "success_criteria": [
+        "Users can register with email/password",
+        "Users can login with valid credentials",
+        "Users can logout and session is cleared",
+        "Passwords are securely hashed",
+        "Basic input validation implemented"
+      ],
+      "deliverables": [
+        "User model with authentication methods",
+        "Login/logout endpoints",
+        "Password hashing utility",
+        "Input validation functions",
+        "Unit tests for all components"
+      ]
+    },
+    "complex_feature": {
+      "task_id": "T2.1: Implement real-time notifications",
+      "description": "Add WebSocket-based real-time notifications system",
+      "estimated_duration": "8 hours",
+      "dependencies": ["T1.1: Implement user authentication"],
+      "success_criteria": [
+        "WebSocket server handles multiple connections",
+        "Notifications sent to specific users",
+        "Connection management with reconnection logic",
+        "Message queuing for offline users",
+        "Admin interface for sending notifications"
+      ],
+      "deliverables": [
+        "WebSocket server implementation",
+        "Client-side notification handler", 
+        "Message queue system",
+        "Admin notification interface",
+        "Integration tests for notification flow"
+      ]
+    },
+    "security_task": {
+      "task_id": "SEC.1: Implement OAuth2 integration",
+      "description": "Add OAuth2 authentication with Google provider",
+      "security_level": "high",
+      "estimated_duration": "6 hours",
+      "success_criteria": [
+        "OAuth2 flow implemented correctly",
+        "Secure token storage and management",
+        "CSRF protection with state parameter",
+        "Token refresh logic implemented",
+        "Security audit passed"
+      ],
+      "security_requirements": [
+        "Use HTTPS for all OAuth endpoints",
+        "Validate state parameter for CSRF protection",
+        "Store tokens securely (encrypted)",
+        "Implement proper token expiration",
+        "Log security events for audit"
+      ]
+    }
+  },
+  "integration_configs": {
+    "cursor_rules": {
+      "version": "1.0",
+      "rules": {
+        "taskEnforcement": {
+          "enabled": true,
+          "requireActiveTask": true,
+          "blockedActions": [
+            "Creating files unrelated to current task",
+            "Modifying critical files without justification"
+          ]
+        },
+        "codeGeneration": {
+          "contextPrefix": "// Current Task: {task_id}\\n// Justification: ",
+          "requireJustification": true
+        }
+      }
+    },
+    "copilot_instructions": "# GitHub Copilot Task Context\n\n## Current Active Task\n**{task_id}**\n\n## Task Requirements\n{requirements}\n\n## Code Generation Guidelines\n1. All suggestions must advance the current task\n2. Follow security best practices\n3. Include appropriate error handling\n4. Add comprehensive tests\n\n## Blocked Suggestions\n- UI/UX changes not related to current task\n- Performance optimizations not critical to task\n- Feature additions outside current scope"
+  }
+}

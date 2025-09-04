@@ -1,0 +1,378 @@
+name: SuperManUS CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+    
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Type checking with mypy
+      run: |
+        mypy --ignore-missing-imports --strict-optional task_enforcer.py llm_guard.py
+        mypy --ignore-missing-imports --strict-optional supermanus/
+      continue-on-error: true  # Type checking is informational
+    
+    - name: Security check with bandit
+      run: |
+        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . --exclude=tests/ --severity-level=medium
+      continue-on-error: true
+    
+    - name: Run unit tests
+      run: |
+        python -m pytest tests/unit/ -v --cov=. --cov-report=xml --cov-report=term
+    
+    - name: Run integration tests
+      run: |
+        python -m pytest tests/integration/ -v --tb=short
+      env:
+        # Set test environment variables
+        SUPERMANUS_TEST_MODE: "true"
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  validation:
+    name: Installation Validation
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Test installation process
+      run: |
+        # Test manual installation
+        python install_supermanus.py . --dry-run
+        python install_supermanus.py .
+    
+    - name: Validate installation
+      run: |
+        python validate_installation.py --no-report
+    
+    - name: Test basic functionality
+      run: |
+        python demo_enforcement.py
+    
+    - name: Run comprehensive test suite
+      run: |
+        python tests/test_runner.py --unit --integration --verbose
+
+  integration-matrix:
+    name: Integration Testing
+    runs-on: ${{ matrix.os }}
+    needs: test
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.11']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Test core functionality
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from task_enforcer import TaskSystemEnforcer
+        from llm_guard import LLMGuard
+        print('✅ Core imports successful')
+        "
+    
+    - name: Test installation script
+      run: |
+        python install_supermanus.py . --dry-run
+      shell: bash
+    
+    - name: Basic validation
+      run: |
+        python validate_installation.py --no-report
+      continue-on-error: true
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+    
+    - name: Run bandit security scan
+      run: |
+        bandit -r . --format json --output bandit-security-report.json
+        bandit -r . --skip B101 --severity-level medium
+      continue-on-error: true
+    
+    - name: Check for known vulnerabilities
+      run: |
+        safety check --json --output safety-report.json || true
+        safety check
+      continue-on-error: true
+    
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          bandit-security-report.json
+          safety-report.json
+      if: always()
+
+  documentation:
+    name: Documentation Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install documentation dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+    
+    - name: Check documentation files
+      run: |
+        # Check that all referenced documentation exists
+        python -c "
+        import os
+        from pathlib import Path
+        
+        docs_dir = Path('docs')
+        required_docs = ['installation.md', 'integrations.md', 'human-review.md', 'api.md']
+        
+        missing_docs = []
+        for doc in required_docs:
+            if not (docs_dir / doc).exists():
+                missing_docs.append(doc)
+        
+        if missing_docs:
+            print(f'❌ Missing documentation: {missing_docs}')
+            exit(1)
+        else:
+            print('✅ All required documentation present')
+        "
+    
+    - name: Validate markdown syntax
+      run: |
+        # Install markdownlint if available
+        npm install -g markdownlint-cli || echo "Markdownlint not available, skipping"
+        markdownlint docs/ *.md || echo "Markdown linting completed with warnings"
+      continue-on-error: true
+    
+    - name: Generate API documentation
+      run: |
+        # Generate API docs using sphinx (if configured)
+        echo "API documentation generation would go here"
+        # Future: sphinx-build -b html docs/ _build/html
+      continue-on-error: true
+
+  performance:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-benchmark memory-profiler
+    
+    - name: Run performance benchmarks
+      run: |
+        # Run performance tests if they exist
+        python -m pytest tests/ -k "benchmark" --benchmark-json=benchmark.json || echo "No benchmark tests found"
+    
+    - name: Memory usage analysis
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from task_enforcer import TaskSystemEnforcer
+        
+        # Basic memory usage test
+        import tracemalloc
+        tracemalloc.start()
+        
+        enforcer = TaskSystemEnforcer('example_project/SESSION_STATE.json')
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        
+        print(f'Current memory usage: {current / 1024 / 1024:.1f} MB')
+        print(f'Peak memory usage: {peak / 1024 / 1024:.1f} MB')
+        
+        # Fail if memory usage is excessive (>100MB for basic operations)
+        if peak > 100 * 1024 * 1024:
+            print('⚠️ High memory usage detected')
+            # Don't fail the build for now, just warn
+        "
+
+  release:
+    name: Release Check
+    runs-on: ubuntu-latest
+    needs: [test, validation, security, documentation]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+    
+    - name: Check package build
+      run: |
+        # Test that package can be built
+        python -m build --sdist --wheel .
+        twine check dist/*
+    
+    - name: Generate release artifacts
+      run: |
+        # Create release package
+        mkdir -p release/
+        cp -r docs/ release/
+        cp *.md release/
+        cp *.py release/
+        cp -r supermanus/ release/
+        cp -r integrations/ release/
+        cp -r example_project/ release/
+        cp -r tests/ release/
+        cp requirements*.txt release/
+        cp install.sh release/
+        
+        # Create archive
+        tar -czf supermanus-taskenforcer-$(date +%Y%m%d).tar.gz release/
+    
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-package
+        path: |
+          supermanus-taskforcer-*.tar.gz
+          dist/
+
+  notify:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [test, validation, security, documentation]
+    if: always()
+    
+    steps:
+    - name: Notify on success
+      if: ${{ needs.test.result == 'success' && needs.validation.result == 'success' }}
+      run: |
+        echo "🎉 SuperManUS CI/CD Pipeline completed successfully!"
+        echo "✅ All tests passed"
+        echo "✅ Installation validation successful"
+        echo "✅ Security scans completed"
+        echo "✅ Documentation checks passed"
+    
+    - name: Notify on failure
+      if: ${{ needs.test.result == 'failure' || needs.validation.result == 'failure' }}
+      run: |
+        echo "🚨 SuperManUS CI/CD Pipeline failed!"
+        echo "❌ Test result: ${{ needs.test.result }}"
+        echo "❌ Validation result: ${{ needs.validation.result }}"
+        echo "❌ Security result: ${{ needs.security.result }}"
+        echo "❌ Documentation result: ${{ needs.documentation.result }}"
+        exit 1

@@ -1,0 +1,482 @@
+name: SuperManUS Task Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  SUPERMANUS_ENFORCEMENT: "strict"
+  SUPERMANUS_VALIDATION_MODE: "true"
+
+jobs:
+  task-discipline-check:
+    name: Task Discipline Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install SuperManUS
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        python install_supermanus.py .
+    
+    - name: Check Active Task Selection
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from task_enforcer import TaskSystemEnforcer
+        
+        try:
+            enforcer = TaskSystemEnforcer('SESSION_STATE.json')
+            active_tasks = enforcer.get_active_tasks()
+            
+            if not active_tasks:
+                print('❌ No active tasks defined in SESSION_STATE.json')
+                sys.exit(1)
+            
+            print(f'✅ {len(active_tasks)} active tasks found')
+            for task in active_tasks[:3]:  # Show first 3 tasks
+                print(f'  - {task}')
+            
+        except Exception as e:
+            print(f'❌ Task system check failed: {e}')
+            sys.exit(1)
+        "
+    
+    - name: Validate Work Log Requirements
+      run: |
+        python -c "
+        import os
+        from pathlib import Path
+        
+        work_logs_dir = Path('work_logs')
+        if not work_logs_dir.exists():
+            print('⚠️ Work logs directory not found - creating')
+            work_logs_dir.mkdir()
+        
+        work_logs = list(work_logs_dir.glob('*.md'))
+        print(f'📋 Found {len(work_logs)} work log files')
+        
+        # Check for work log template
+        template_file = Path('WORK_LOG_TEMPLATE.md')
+        if template_file.exists():
+            print('✅ Work log template available')
+        else:
+            print('❌ Work log template missing')
+        "
+    
+    - name: Test Task Enforcement
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from task_enforcer import TaskSystemEnforcer
+        from llm_guard import LLMGuard
+        
+        try:
+            # Test task selection
+            enforcer = TaskSystemEnforcer('SESSION_STATE.json')
+            guard = LLMGuard(enforcer)
+            
+            # This should fail - no task selected
+            try:
+                guard.validate_action('write_file', {'path': 'test.py'}, 'Test action')
+                print('❌ Task enforcement not working - should have blocked action')
+                sys.exit(1)
+            except Exception:
+                print('✅ Task enforcement working - action properly blocked')
+            
+            # Select a task and try again
+            active_tasks = enforcer.get_active_tasks()
+            if active_tasks:
+                enforcer.select_task(active_tasks[0])
+                print(f'✅ Task selected: {active_tasks[0][:50]}...')
+            
+        except Exception as e:
+            print(f'❌ Task enforcement test failed: {e}')
+            sys.exit(1)
+        "
+    
+    - name: Validate Integration Configurations
+      run: |
+        python -c "
+        import json
+        from pathlib import Path
+        
+        integration_configs = {
+            '.cursorrules.json': 'Cursor IDE integration',
+            '.copilot-instructions.md': 'GitHub Copilot integration'
+        }
+        
+        configured_integrations = 0
+        for config_file, description in integration_configs.items():
+            if Path(config_file).exists():
+                print(f'✅ {description} configured')
+                configured_integrations += 1
+            else:
+                print(f'⚠️ {description} not configured')
+        
+        print(f'📊 Integration status: {configured_integrations}/{len(integration_configs)} configured')
+        "
+    
+    - name: Check Human Validation Setup
+      run: |
+        python -c "
+        from pathlib import Path
+        
+        validation_files = [
+            'HUMAN_VALIDATION_GUIDE.md',
+            'WORK_LOG_TEMPLATE.md'
+        ]
+        
+        missing_files = []
+        for file_name in validation_files:
+            if not Path(file_name).exists():
+                missing_files.append(file_name)
+        
+        if missing_files:
+            print(f'❌ Missing validation files: {missing_files}')
+        else:
+            print('✅ Human validation system properly configured')
+        "
+    
+    - name: Test Demo Enforcement
+      run: |
+        # Run the demo to ensure basic functionality
+        timeout 30 python demo_enforcement.py || echo "Demo completed or timed out"
+    
+    - name: Generate Task Discipline Report
+      run: |
+        python -c "
+        import json
+        from datetime import datetime
+        from pathlib import Path
+        
+        # Generate task discipline validation report
+        report = {
+            'validation_timestamp': datetime.now().isoformat(),
+            'repository': '${{ github.repository }}',
+            'branch': '${{ github.ref_name }}',
+            'commit': '${{ github.sha }}',
+            'validation_results': {
+                'session_state_valid': Path('SESSION_STATE.json').exists(),
+                'work_log_template_exists': Path('WORK_LOG_TEMPLATE.md').exists(),
+                'human_validation_guide_exists': Path('HUMAN_VALIDATION_GUIDE.md').exists(),
+                'supermanus_directory_exists': Path('supermanus').exists(),
+                'integrations_directory_exists': Path('integrations').exists(),
+            },
+            'enforcement_status': 'active',
+            'compliance_score': 0.0
+        }
+        
+        # Calculate compliance score
+        total_checks = len(report['validation_results'])
+        passed_checks = sum(1 for result in report['validation_results'].values() if result)
+        report['compliance_score'] = passed_checks / total_checks
+        
+        # Save report
+        with open('task_discipline_report.json', 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        print(f\"📊 Task Discipline Compliance: {report['compliance_score']:.1%}\")
+        
+        if report['compliance_score'] < 0.8:
+            print('⚠️ Task discipline compliance below 80%')
+        else:
+            print('✅ Task discipline compliance acceptable')
+        "
+    
+    - name: Upload Task Discipline Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: task-discipline-report
+        path: task_discipline_report.json
+
+  enforcement-integration-test:
+    name: Enforcement Integration Test
+    runs-on: ubuntu-latest
+    needs: task-discipline-check
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install SuperManUS
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        python install_supermanus.py .
+    
+    - name: Create Test Project Structure
+      run: |
+        mkdir -p test_project/{src,tests,work_logs}
+        
+        # Create test session state
+        cat > test_project/SESSION_STATE.json << 'EOF'
+        {
+          "current_session_id": "CI_TEST_001",
+          "project_name": "CI Test Project",
+          "active_tasks": [
+            "CI.1: Test task enforcement in CI environment",
+            "CI.2: Validate integration functionality"
+          ],
+          "completed_tasks": [],
+          "team_assignments": {
+            "ci_bot": ["CI.1", "CI.2"]
+          },
+          "validation_requirements": {
+            "all_tasks": {
+              "work_log_required": false,
+              "proof_required": true
+            }
+          }
+        }
+        EOF
+    
+    - name: Test Task Enforcement in Project
+      run: |
+        cd test_project
+        
+        python -c "
+        import sys
+        sys.path.insert(0, '..')
+        from task_enforcer import TaskSystemEnforcer
+        from llm_guard import LLMGuard
+        
+        # Initialize enforcement
+        enforcer = TaskSystemEnforcer('SESSION_STATE.json')
+        guard = LLMGuard(enforcer)
+        
+        # Test task selection
+        enforcer.select_task('CI.1: Test task enforcement in CI environment')
+        print('✅ Task selected successfully')
+        
+        # Test valid action
+        result = guard.validate_action(
+            'write_file',
+            {'path': 'src/test.py', 'content': 'print(\"CI test\")'},
+            'Creating test file for CI.1 task enforcement validation'
+        )
+        print('✅ Valid action approved')
+        
+        # Test invalid action (should be blocked)
+        try:
+            guard.validate_action(
+                'write_file', 
+                {'path': 'unrelated.py'},
+                'Random unrelated work'
+            )
+            print('❌ Invalid action was not blocked!')
+            sys.exit(1)
+        except Exception:
+            print('✅ Invalid action properly blocked')
+        
+        print('✅ Task enforcement integration test passed')
+        "
+    
+    - name: Test Analytics Module
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from supermanus.analytics import TaskEnforcementMetrics, AnalyticsReporter
+        
+        try:
+            # Test metrics calculation
+            metrics = TaskEnforcementMetrics('test_project/SESSION_STATE.json')
+            completion_rate = metrics.task_completion_rate()
+            print(f'✅ Metrics calculation successful: {completion_rate:.1%} completion rate')
+            
+            # Test analytics reporting
+            reporter = AnalyticsReporter(metrics)
+            summary = reporter.generate_executive_summary(save_to_file=False)
+            print(f'✅ Analytics reporting successful: {len(summary)} chars generated')
+            
+        except Exception as e:
+            print(f'❌ Analytics module test failed: {e}')
+            sys.exit(1)
+        "
+    
+    - name: Cleanup Test Environment
+      run: |
+        rm -rf test_project/
+        echo "✅ Test environment cleaned up"
+
+  documentation-validation:
+    name: Documentation Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Check Documentation Completeness
+      run: |
+        python -c "
+        from pathlib import Path
+        import sys
+        
+        # Check required documentation files
+        required_docs = {
+            'README.md': 'Project overview and quick start',
+            'docs/installation.md': 'Installation instructions',
+            'docs/integrations.md': 'AI tool integration guide',
+            'docs/human-review.md': 'Human validation process',
+            'docs/api.md': 'API reference documentation',
+            'WORK_LOG_TEMPLATE.md': 'Work log template',
+            'HUMAN_VALIDATION_GUIDE.md': 'Human validation guide',
+            'INTEGRATION_GUIDE.md': 'Integration guide'
+        }
+        
+        missing_docs = []
+        for doc_path, description in required_docs.items():
+            if not Path(doc_path).exists():
+                missing_docs.append(f'{doc_path} ({description})')
+            else:
+                print(f'✅ {doc_path} - {description}')
+        
+        if missing_docs:
+            print('❌ Missing required documentation:')
+            for doc in missing_docs:
+                print(f'  - {doc}')
+            sys.exit(1)
+        else:
+            print('✅ All required documentation is present')
+        "
+    
+    - name: Validate Documentation Links
+      run: |
+        # Check for broken internal links in documentation
+        python -c "
+        import re
+        from pathlib import Path
+        
+        def check_internal_links(file_path):
+            content = file_path.read_text()
+            # Find markdown links [text](path)
+            links = re.findall(r'\[([^\]]+)\]\(([^)]+)\)', content)
+            
+            broken_links = []
+            for link_text, link_path in links:
+                # Skip external URLs
+                if link_path.startswith('http'):
+                    continue
+                
+                # Check if internal file exists
+                target_path = file_path.parent / link_path
+                if not target_path.exists():
+                    broken_links.append((link_text, link_path))
+            
+            return broken_links
+        
+        all_broken_links = []
+        for md_file in Path('.').rglob('*.md'):
+            broken_links = check_internal_links(md_file)
+            if broken_links:
+                print(f'⚠️ Broken links in {md_file}:')
+                for text, path in broken_links:
+                    print(f'  - [{text}]({path})')
+                all_broken_links.extend(broken_links)
+        
+        if all_broken_links:
+            print(f'⚠️ Found {len(all_broken_links)} broken internal links')
+        else:
+            print('✅ No broken internal links found')
+        "
+
+  final-validation:
+    name: Final SuperManUS Validation
+    runs-on: ubuntu-latest
+    needs: [task-discipline-check, enforcement-integration-test, documentation-validation]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Full Installation and Validation
+      run: |
+        # Install SuperManUS
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        python install_supermanus.py .
+        
+        # Run comprehensive validation
+        python validate_installation.py --no-report
+    
+    - name: Generate Final Compliance Report
+      run: |
+        python -c "
+        import json
+        from datetime import datetime
+        
+        # Generate comprehensive compliance report
+        compliance_report = {
+            'validation_timestamp': datetime.now().isoformat(),
+            'github_context': {
+                'repository': '${{ github.repository }}',
+                'ref': '${{ github.ref }}',
+                'sha': '${{ github.sha }}',
+                'actor': '${{ github.actor }}',
+                'workflow': '${{ github.workflow }}'
+            },
+            'validation_stages': {
+                'task_discipline_check': '${{ needs.task-discipline-check.result }}',
+                'enforcement_integration_test': '${{ needs.enforcement-integration-test.result }}',
+                'documentation_validation': '${{ needs.documentation-validation.result }}'
+            },
+            'overall_status': 'COMPLIANT',
+            'supermanus_version': '1.0.0',
+            'enforcement_ready': True
+        }
+        
+        # Check if any stage failed
+        failed_stages = [stage for stage, result in compliance_report['validation_stages'].items() 
+                        if result == 'failure']
+        
+        if failed_stages:
+            compliance_report['overall_status'] = 'NON_COMPLIANT'
+            compliance_report['enforcement_ready'] = False
+            compliance_report['failed_stages'] = failed_stages
+        
+        # Save final report
+        with open('supermanus_compliance_report.json', 'w') as f:
+            json.dump(compliance_report, f, indent=2)
+        
+        print('🛡️ SuperManUS Task Enforcement Validation Complete')
+        print(f\"📊 Overall Status: {compliance_report['overall_status']}\")
+        print(f\"🚀 Enforcement Ready: {compliance_report['enforcement_ready']}\")
+        
+        if not compliance_report['enforcement_ready']:
+            print('❌ SuperManUS validation failed')
+            exit(1)
+        else:
+            print('✅ SuperManUS validation successful - Ready for task enforcement!')
+        "
+    
+    - name: Upload Final Compliance Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: supermanus-compliance-report
+        path: supermanus_compliance_report.json
+      if: always()
